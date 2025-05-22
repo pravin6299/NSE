@@ -100,6 +100,7 @@
         </form>
     </div>
 
+    <!-- Stock Table -->
     <div class="table-responsive">
         <table class="table table-striped table-bordered stock-table">
             <thead>
@@ -108,12 +109,15 @@
                     <th>Name</th>
                     <th>Segment</th>
                     <th>Change %</th>
-                    <th>Price</th>
+                    <th>Current Price</th>
+                    <th>Open</th>
+                    <th>High</th>
+                    <th>Low</th>
+                    <th>Previous Close</th>
                     <th>Volume</th>
                     <th>Market Cap</th>
                     <th>52W High</th>
                     <th>52W Low</th>
-                    <th>Current Price</th>
                     <th>5D %</th>
                     <th>10D %</th>
                     <th>20D %</th>
@@ -126,10 +130,7 @@
                     <th>3Y %</th>
                     <th>5Y %</th>
                     <th>Hist. Rows</th>
-                    <th>Column1</th>
-                    <th>Column2</th>
-                    <th>Column3</th>
-                    <th>Actions</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -138,13 +139,16 @@
                     <td>{{ stock.tradingsymbol }}</td>
                     <td>{{ stock.name }}</td>
                     <td>{{ stock.segment }}</td>
-                    <td id="change-{{ stock.tradingsymbol }}">--%</td>
-                    <td id="price-{{ stock.tradingsymbol }}">--</td>
-                    <td id="volume-{{ stock.tradingsymbol }}">--</td>
-                    <td id="marketcap-{{ stock.tradingsymbol }}" class="market-cap">--</td>
+                    <td>{{ stock.change_percent }}%</td>
+                    <td>{{ stock.price }}</td>
+                    <td>{{ stock.open|default:"--" }}</td>
+                    <td>{{ stock.high|default:"--" }}</td>
+                    <td>{{ stock.low|default:"--" }}</td>
+                    <td>{{ stock.previous_close|default:"--" }}</td>
+                    <td>{{ stock.volume|default:"--" }}</td>
+                    <td class="market-cap">{{ stock.marketcap|intcomma }}</td>
                     <td>{{ stock.high52|floatformat:2 }}</td>
                     <td>{{ stock.low52|floatformat:2 }}</td>
-                    <td>{{ stock.price|floatformat:2 }}</td>
                     <td>{{ stock.PRICE_CHANGE_5D|default:"--" }}</td>
                     <td>{{ stock.PRICE_CHANGE_10D|default:"--" }}</td>
                     <td>{{ stock.PRICE_CHANGE_20D|default:"--" }}</td>
@@ -157,9 +161,6 @@
                     <td>{{ stock.PRICE_CHANGE_3Y|default:"--" }}</td>
                     <td>{{ stock.PRICE_CHANGE_5Y|default:"--" }}</td>
                     <td>{{ stock.historical_row_count }}</td>
-                    <td>{{ None }}</td>
-                    <td>{{ None }}</td>
-                    <td>{{ None }}</td>
                     <td>
                         {% if stock.tradingsymbol %}
                         <a href="{% url 'stock_detail' stock.tradingsymbol %}" class="btn btn-sm btn-info">View</a>
@@ -257,7 +258,7 @@
             searching: false,
             responsive: true
         });
-
+        
         refreshAllStocks();
         setInterval(refreshAllStocks, 10000); // Refresh every 10 seconds
 

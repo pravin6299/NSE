@@ -229,22 +229,26 @@ from datetime import timedelta
 from .models import InstrumentDetails, HistoricalOHLC
 
 
+from collections import defaultdict
+from django.db.models import Q, Max, Min, Count
+from django.shortcuts import render
+from django.core.paginator import Paginator
+from django.utils.timezone import now
+from datetime import timedelta
+
+from .models import InstrumentDetails, HistoricalOHLC
+
+
 def calculate_price_change(stock, latest_ohlc, days):
-    """
-    Calculates percentage price change from the close price N days ago to the current price.
-    """
     if not latest_ohlc:
         return None
-
     target_date = latest_ohlc.timestamp - timedelta(days=days)
     old_ohlc = HistoricalOHLC.objects.filter(
         instrument_id=stock.id,
         timestamp__lte=target_date
     ).order_by('-timestamp').first()
-
     if not old_ohlc or not old_ohlc.close:
         return None
-
     try:
         return round(((latest_ohlc.close - old_ohlc.close) / old_ohlc.close) * 100, 2)
     except ZeroDivisionError:
@@ -287,38 +291,31 @@ def stock_market_view(request):
     paginator = Paginator(stocks, 25)
     page_number = request.GET.get('page')
     current_page = paginator.get_page(page_number)
-
     current_ids = list(current_page.object_list.values_list('id', flat=True))
 
-    # 52-week high/low
+    # 52-week high and low
     one_year_ago = now() - timedelta(days=365)
     ohlc_agg = HistoricalOHLC.objects.filter(
         instrument_id__in=current_ids,
         timestamp__gte=one_year_ago
-    ).values('instrument_id') \
-     .annotate(high52=Max('high'), low52=Min('low'))
-    high_low_map = {
-        entry['instrument_id']: (
-            round(entry['high52'] or 0.0, 2),
-            round(entry['low52'] or 0.0, 2)
-        ) for entry in ohlc_agg
-    }
+    ).values('instrument_id').annotate(
+        high52=Max('high'),
+        low52=Min('low')
+    )
+    high_low_map = {entry['instrument_id']: (entry['high52'], entry['low52']) for entry in ohlc_agg}
 
-    # Historical row count
+    # Count of historical rows
     historical_counts = HistoricalOHLC.objects.filter(
         instrument_id__in=current_ids
-    ).values('instrument_id') \
-     .annotate(count=Count('id'))
+    ).values('instrument_id').annotate(count=Count('id'))
     historical_count_map = {entry['instrument_id']: entry['count'] for entry in historical_counts}
 
-    # Latest and previous OHLCs
     latest_ohlcs = HistoricalOHLC.objects.filter(
         instrument_id__in=current_ids
     ).order_by('instrument_id', '-timestamp')
 
     ohlc_latest_map = {}
     ohlc_previous_map = defaultdict(list)
-
     for ohlc in latest_ohlcs:
         if ohlc.instrument_id not in ohlc_latest_map:
             ohlc_latest_map[ohlc.instrument_id] = ohlc
@@ -333,12 +330,9 @@ def stock_market_view(request):
         current_price = latest_ohlc.close if latest_ohlc else 0.0
         previous_close = previous_ohlc.close if previous_ohlc else 0.0
 
-        if previous_close:
-            try:
-                change_percent = ((current_price - previous_close) / previous_close) * 100
-            except ZeroDivisionError:
-                change_percent = 0.0
-        else:
+        try:
+            change_percent = ((current_price - previous_close) / previous_close) * 100 if previous_close else 0.0
+        except ZeroDivisionError:
             change_percent = 0.0
 
         high52, low52 = high_low_map.get(stock.id, (0.0, 0.0))
@@ -356,8 +350,8 @@ def stock_market_view(request):
             'previous_close': previous_close,
             'volume': latest_ohlc.volume if latest_ohlc else None,
             'marketcap': round(market_cap, 2),
-            'high52': high52,
-            'low52': low52,
+            'high52': round(high52 or 0.0, 2),
+            'low52': round(low52 or 0.0, 2),
             'PRICE_CHANGE_5D': calculate_price_change(stock, latest_ohlc, 5),
             'PRICE_CHANGE_10D': calculate_price_change(stock, latest_ohlc, 10),
             'PRICE_CHANGE_20D': calculate_price_change(stock, latest_ohlc, 20),
@@ -366,9 +360,9 @@ def stock_market_view(request):
             'PRICE_CHANGE_90D': calculate_price_change(stock, latest_ohlc, 90),
             'PRICE_CHANGE_6M': calculate_price_change(stock, latest_ohlc, 182),
             'PRICE_CHANGE_1Y': calculate_price_change(stock, latest_ohlc, 365),
-            'PRICE_CHANGE_2Y': calculate_price_change(stock, latest_ohlc, 365 * 2),
-            'PRICE_CHANGE_3Y': calculate_price_change(stock, latest_ohlc, 365 * 3),
-            'PRICE_CHANGE_5Y': calculate_price_change(stock, latest_ohlc, 365 * 5),
+            'PRICE_CHANGE_2Y': calculate_price_change(stock, latest_ohlc, 730),
+            'PRICE_CHANGE_3Y': calculate_price_change(stock, latest_ohlc, 1095),
+            'PRICE_CHANGE_5Y': calculate_price_change(stock, latest_ohlc, 1825),
             'historical_row_count': historical_count_map.get(stock.id, 0),
         }
 
