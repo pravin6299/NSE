@@ -130,6 +130,9 @@
                     <th>3Y %</th>
                     <th>5Y %</th>
                     <th>Hist. Rows</th>
+                    <th>Column1</th>
+                    <th>Column2</th>
+                    <th>Column3</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -161,6 +164,9 @@
                     <td>{{ stock.PRICE_CHANGE_3Y|default:"--" }}</td>
                     <td>{{ stock.PRICE_CHANGE_5Y|default:"--" }}</td>
                     <td>{{ stock.historical_row_count }}</td>
+                    <td>{{ None }}</td>
+                    <td>{{ None }}</td>
+                    <td>{{ None }}</td>
                     <td>
                         {% if stock.tradingsymbol %}
                         <a href="{% url 'stock_detail' stock.tradingsymbol %}" class="btn btn-sm btn-info">View</a>
