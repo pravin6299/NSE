@@ -88,6 +88,8 @@
                 <option value="instrument_token" {% if current_sort == 'instrument_token' %}selected{% endif %}>Market Cap (Low to High)</option>
                 <option value="-volume" {% if current_sort == '-volume' %}selected{% endif %}>Volume (High to Low)</option>
                 <option value="volume" {% if current_sort == 'volume' %}selected{% endif %}>Volume (Low to High)</option>
+                <option value="-change_percent" {% if current_sort == '-change_percent' %}selected{% endif %}>Change % (High to Low)</option>
+                <option value="change_percent" {% if current_sort == 'change_percent' %}selected{% endif %}>Change % (Low to High)</option>
                 <option value="-last_price" {% if current_sort == '-last_price' %}selected{% endif %}>Price (High to Low)</option>
                 <option value="last_price" {% if current_sort == 'last_price' %}selected{% endif %}>Price (Low to High)</option>
                 <option value="-tradingsymbol" {% if current_sort == '-tradingsymbol' %}selected{% endif %}>Symbol (Z to A)</option>
@@ -100,6 +102,7 @@
         </form>
     </div>
 
+    <!-- Stock Table -->
     <div class="table-responsive">
         <table class="table table-striped table-bordered stock-table">
             <thead>
@@ -107,13 +110,27 @@
                     <th>Symbol</th>
                     <th>Name</th>
                     <th>Segment</th>
-                    <th>Change %</th>
-                    <th>Price</th>
+                    <th>
+                        Change % 
+                        <a href="?page=1&search={{ current_search }}&segment={{ current_segment }}&min_market_cap={{ current_min_market_cap }}&max_market_cap={{ current_max_market_cap }}&sort_by={% if current_sort == 'change_percent' %}-{% endif %}change_percent" class="text-dark">
+                            {% if current_sort == 'change_percent' %}
+                                ▲
+                            {% elif current_sort == '-change_percent' %}
+                                ▼
+                            {% else %}
+                                ↕
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th>Current Price</th>
+                    <th>Open</th>
+                    <th>High</th>
+                    <th>Low</th>
+                    <th>Previous Close</th>
                     <th>Volume</th>
                     <th>Market Cap</th>
                     <th>52W High</th>
                     <th>52W Low</th>
-                    <th>Current Price</th>
                     <th>5D %</th>
                     <th>10D %</th>
                     <th>20D %</th>
@@ -129,7 +146,7 @@
                     <th>Column1</th>
                     <th>Column2</th>
                     <th>Column3</th>
-                    <th>Actions</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -138,13 +155,16 @@
                     <td>{{ stock.tradingsymbol }}</td>
                     <td>{{ stock.name }}</td>
                     <td>{{ stock.segment }}</td>
-                    <td id="change-{{ stock.tradingsymbol }}">--%</td>
-                    <td id="price-{{ stock.tradingsymbol }}">--</td>
-                    <td id="volume-{{ stock.tradingsymbol }}">--</td>
-                    <td id="marketcap-{{ stock.tradingsymbol }}" class="market-cap">--</td>
+                    <td>{{ stock.change_percent }}%</td>
+                    <td>{{ stock.price }}</td>
+                    <td>{{ stock.open|default:"--" }}</td>
+                    <td>{{ stock.high|default:"--" }}</td>
+                    <td>{{ stock.low|default:"--" }}</td>
+                    <td>{{ stock.previous_close|default:"--" }}</td>
+                    <td>{{ stock.volume|default:"--" }}</td>
+                    <td class="market-cap">{{ stock.marketcap|intcomma }}</td>
                     <td>{{ stock.high52|floatformat:2 }}</td>
                     <td>{{ stock.low52|floatformat:2 }}</td>
-                    <td>{{ stock.price|floatformat:2 }}</td>
                     <td>{{ stock.PRICE_CHANGE_5D|default:"--" }}</td>
                     <td>{{ stock.PRICE_CHANGE_10D|default:"--" }}</td>
                     <td>{{ stock.PRICE_CHANGE_20D|default:"--" }}</td>
