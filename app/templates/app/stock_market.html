@@ -88,6 +88,8 @@
                 <option value="instrument_token" {% if current_sort == 'instrument_token' %}selected{% endif %}>Market Cap (Low to High)</option>
                 <option value="-volume" {% if current_sort == '-volume' %}selected{% endif %}>Volume (High to Low)</option>
                 <option value="volume" {% if current_sort == 'volume' %}selected{% endif %}>Volume (Low to High)</option>
+                <option value="-change_percent" {% if current_sort == '-change_percent' %}selected{% endif %}>Change % (High to Low)</option>
+                <option value="change_percent" {% if current_sort == 'change_percent' %}selected{% endif %}>Change % (Low to High)</option>
                 <option value="-last_price" {% if current_sort == '-last_price' %}selected{% endif %}>Price (High to Low)</option>
                 <option value="last_price" {% if current_sort == 'last_price' %}selected{% endif %}>Price (Low to High)</option>
                 <option value="-tradingsymbol" {% if current_sort == '-tradingsymbol' %}selected{% endif %}>Symbol (Z to A)</option>
@@ -108,7 +110,18 @@
                     <th>Symbol</th>
                     <th>Name</th>
                     <th>Segment</th>
-                    <th>Change %</th>
+                    <th>
+                        Change % 
+                        <a href="?page=1&search={{ current_search }}&segment={{ current_segment }}&min_market_cap={{ current_min_market_cap }}&max_market_cap={{ current_max_market_cap }}&sort_by={% if current_sort == 'change_percent' %}-{% endif %}change_percent" class="text-dark">
+                            {% if current_sort == 'change_percent' %}
+                                ▲
+                            {% elif current_sort == '-change_percent' %}
+                                ▼
+                            {% else %}
+                                ↕
+                            {% endif %}
+                        </a>
+                    </th>
                     <th>Current Price</th>
                     <th>Open</th>
                     <th>High</th>
