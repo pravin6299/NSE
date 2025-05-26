@@ -14,6 +14,20 @@
     .market-cap { font-weight: bold; }
     .table-responsive { overflow-x: auto; }
     
+    /* Sortable header styles */
+    .sortable-header {
+        cursor: pointer;
+        user-select: none;
+        transition: color 0.2s;
+    }
+    .sortable-header:hover {
+        color: #007bff !important;
+    }
+    .sort-indicator {
+        display: inline-block;
+        margin-left: 5px;
+    }
+    
     /* Pagination Styles */
     .pagination {
         display: flex;
@@ -111,22 +125,24 @@
                     <th>Name</th>
                     <th>Segment</th>
                     <th>
-                        Change % 
-                        <a href="?page=1&search={{ current_search }}&segment={{ current_segment }}&min_market_cap={{ current_min_market_cap }}&max_market_cap={{ current_max_market_cap }}&sort_by={% if current_sort == 'change_percent' %}-{% endif %}change_percent" class="text-dark">
-                            {% if current_sort == 'change_percent' %}
-                                ▲
-                            {% elif current_sort == '-change_percent' %}
-                                ▼
-                            {% else %}
-                                ↕
-                            {% endif %}
+                        <a href="?page=1&search={{ current_search }}&segment={{ current_segment }}&min_market_cap={{ current_min_market_cap }}&max_market_cap={{ current_max_market_cap }}&sort_by={% if current_sort == 'change_percent' %}-{% endif %}change_percent" class="text-dark text-decoration-none sortable-header">
+                            Change % 
+                            <span class="sort-indicator">
+                                {% if current_sort == 'change_percent' %}
+                                    ▲
+                                {% elif current_sort == '-change_percent' %}
+                                    ▼
+                                {% else %}
+                                    ↕
+                                {% endif %}
+                            </span>
                         </a>
                     </th>
                     <th>Current Price</th>
                     <th>Open</th>
                     <th>High</th>
                     <th>Low</th>
-                    <th>Previous Close</th>
+                    <th>Close</th>
                     <th>Volume</th>
                     <th>Market Cap</th>
                     <th>52W High</th>
