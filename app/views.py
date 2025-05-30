@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.db.models import Q
-from .models import CorporateFiling, InstrumentDetails, HistoricalOHLC
+from .models import CorporateFiling, InstrumentDetails, HistoricalOHLC, KiteToken
 from datetime import datetime
 from django.core.paginator import Paginator
 import pandas as pd
@@ -8,6 +8,19 @@ import numpy as np
 from django.utils import timezone
 from datetime import timedelta
 from django.utils.timezone import now
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_protect
+import subprocess
+import json
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from kiteconnect import KiteConnect
+import pyotp
+from django.conf import settings
 
 
 # lalit
@@ -473,3 +486,96 @@ def stock_detail_view(request, symbol):
 
     except Exception as e:
         return render(request, 'app/error.html', {'message': str(e)})
+
+
+def generate_access_token():
+    try:
+        # Get credentials from settings
+        credentials = {
+            'api_key': "t0zjktzp454kxkzt",
+            'api_secret': "aki7m034o2ud5swopbw0g88muoq0ifjt",
+            'user_id': "6353438333",
+            'password':  "Pravin@6299" 
+        }
+
+        # Initialize Kite
+        kite = KiteConnect(api_key=credentials['api_key'])
+
+        # Setup Chrome options - Remove headless mode
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_argument('--start-maximized')  # Start with maximized window
+
+        # Initialize driver
+        driver = webdriver.Chrome(options=chrome_options)
+
+        try:
+            # Get the login URL
+            login_url = kite.login_url()
+            driver.get(login_url)
+
+            # Wait for and fill in the username and password
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "userid"))
+            ).send_keys(credentials['user_id'])
+
+            password_input = driver.find_element(By.ID, "password")
+            password_input.send_keys(credentials['password'])
+            
+            # Click login button
+            driver.find_element(By.CLASS_NAME, "button-orange").click()
+
+            # Wait for the continue button to be clicked after manual TOTP entry
+            # This will wait up to 60 seconds for the URL to change
+            WebDriverWait(driver, 60).until(
+                lambda driver: 'request_token' in driver.current_url
+            )
+            
+            current_url = driver.current_url
+            
+            # Extract request token
+            request_token = current_url.split('request_token=')[1].split('&')[0]
+
+            # Generate session
+            data = kite.generate_session(request_token, api_secret=credentials['api_secret'])
+            access_token = data["access_token"]
+
+            return {
+                'status': 'success',
+                'access_token': access_token,
+                'message': 'Token generated successfully'
+            }
+
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error during token generation: {str(e)}'
+            }
+        finally:
+            driver.quit()
+
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': f'Setup error: {str(e)}'
+        }
+
+
+@csrf_protect
+@require_http_methods(["POST"])
+def generate_token(request):
+    try:
+        print("function called..")
+        result = generate_access_token()
+        
+        if result['status'] == 'success':
+            # Save token to database
+            KiteToken.objects.create(access_token=result['access_token'])
+            return JsonResponse(result)
+        else:
+            return JsonResponse(result, status=500)
+            
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
