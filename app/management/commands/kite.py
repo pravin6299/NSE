@@ -1,189 +1,67 @@
-from kiteconnect import KiteConnect
-
-# Replace with your API key and secret from Zerodha developer console
-# api_key = "t0zjktzp454kxkzt"
-# api_secret = "aki7m034o2ud5swopbw0g88muoq0ifjt"
-
-# # You must generate this manually after logging in via the Kite login flow
-# # Get the request_token from the redirect URL after logging in
-# request_token = "uUsJFZhskY2egXvTZl0yUJ0jA6qLQjTI"
-
-# kite = KiteConnect(api_key=api_key)
-
-# try:
-#     # Generate access token
-#     data = kite.generate_session(request_token, api_secret=api_secret)
-#     access_token = data["access_token"]
-#     kite.set_access_token(access_token)
-
-#     # Get user profile info
-#     user_profile = kite.profile()
-#     print("User Profile Information:")
-#     print("User ID:", user_profile['user_id'])
-#     print("User Name:", user_profile['user_name'])
-#     print("Email:", user_profile['email'])
-#     print("User Type:", user_profile['user_type'])
-#     print("Broker:", user_profile['broker'])
-#     margins = kite.margins("equity")  # or use "commodity" for commodity segment
-#     print("\nUser Balance (Equity):")
-#     print("Available Cash:", margins['available']['cash'])
-#     print("Available Intraday Margin:", margins['available']['intraday_payin'])
-#     print("Used Margin:", margins['utilised']['debits'])
-
-# except Exception as e:
-#     print("Error:", e)
-
-
-# for access token
-# https://kite.zerodha.com/connect/login?v=3&api_key=xxx
-
-
-
 from django.core.management.base import BaseCommand
 from kiteconnect import KiteConnect
-import requests
-import csv
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+import time
+import urllib.parse
 from app.models import KiteToken
+
+# ✅ Your provided credentials
+API_KEY = "doieti8s40hlpp6l"
+API_SECRET = "ijm22wvh5ks2k8m1c72psg17drfj4s29"
+USERNAME = "6353438333"
+PASSWORD = "Pravin@6299"
+
 class Command(BaseCommand):
-    help = "Fetch user profile and balance from Zerodha Kite"
+    help = "Auto-login to Zerodha Kite, get access token, and save to DB"
+    print("command called")
 
     def handle(self, *args, **kwargs):
-        # api_key = "t0zjktzp454kxkzt"
-        # api_secret = "aki7m034o2ud5swopbw0g88muoq0ifjt"
-        # request_token = "9dHgm1XuAA5MUHu4NsB16gH1TR0GJZl1"
-
-        # kite = KiteConnect(api_key=api_key)
-
+        driver = None
         try:
-        #     data = kite.generate_session(request_token, api_secret=api_secret)
-        #     access_token = data["access_token"]
-        #     kite.set_access_token(access_token)
+            # Launch browser (visible)
+            chrome_options = Options()
+            chrome_options.add_experimental_option("detach", True)  # Keeps browser open
+            driver = webdriver.Chrome(options=chrome_options)
 
-            # user_profile = kite.profile()
-            # self.stdout.write("User Profile Information:")
-            # self.stdout.write(f"User ID: {user_profile['user_id']}")
-            # self.stdout.write(f"User Name: {user_profile['user_name']}")
-            # self.stdout.write(f"Email: {user_profile['email']}")
-            # self.stdout.write(f"User Type: {user_profile['user_type']}")
-            # self.stdout.write(f"Broker: {user_profile['broker']}")
+            self.stdout.write("🌐 Opening Zerodha login...")
+            driver.get(f"https://kite.zerodha.com/connect/login?v=3&api_key={API_KEY}")
+            time.sleep(2)
 
-            # margins = kite.margins("equity")
-            # self.stdout.write("\nUser Balance (Equity):")
-            # self.stdout.write(f"Available Cash: {margins['available']['cash']}")
-            # self.stdout.write(f"Available Intraday Margin: {margins['available']['intraday_payin']}")
-            # self.stdout.write(f"Used Margin: {margins['utilised']['debits']}")
-            # instruments = kite.instruments("NFO")
+            # Login
+            driver.find_element(By.ID, "userid").send_keys(USERNAME)
+            driver.find_element(By.ID, "password").send_keys(PASSWORD)
+            driver.find_element(By.XPATH, '//button[@type="submit"]').click()
+            time.sleep(2)
 
+            self.stdout.write("⏳ Please manually enter OTP in the browser...")
+            for i in range(60):
+                current_url = driver.current_url
+                if "request_token=" in current_url:
+                    break
+                time.sleep(1)
 
-            # # Filter for NIFTY options
-            # nifty_options = [i for i in instruments if i['segment'] == 'NFO-OPT' and i['name'] == 'NIFTY']
+            parsed = urllib.parse.urlparse(driver.current_url)
+            request_token = urllib.parse.parse_qs(parsed.query).get("request_token", [None])[0]
 
-            # # Step 1: List available expiry dates
-            # expiries = sorted(set(i['expiry'] for i in nifty_options))
-            # print("Available Expiry Dates for NIFTY:")
-            # for e in expiries:
-            #     print(e)
+            if not request_token:
+                self.stderr.write("❌ Could not find request_token in redirected URL.")
+                return
 
-            # # Pick one expiry to explore
-            # selected_expiry = expiries[0]  # or choose any from the printed list
-
-            # # Step 2: List strikes available for that expiry
-            # available_strikes = sorted(set(i['strike'] for i in nifty_options if i['expiry'] == selected_expiry))
-            # print(f"\nAvailable Strikes for Expiry {selected_expiry}:")
-            # print(available_strikes)
-
-            # # Step 3 (Optional): Pick strike + type and get LTP
-            # strike = available_strikes[len(available_strikes) // 2]  # Mid strike
-            # option_type = "CE"
-
-            # filtered = [
-            #     i for i in nifty_options
-            #     if i['expiry'] == selected_expiry and
-            #     i['strike'] == strike and
-            #     i['instrument_type'] == option_type
-            # ]
-
-            # if filtered:
-            #     token = filtered[0]['instrument_token']
-            #     ltp = kite.ltp([token])
-            #     print(f"\nLTP for NIFTY {strike}{option_type} ({selected_expiry}):", ltp[str(token)]['last_price'])
-            # else:
-            #     print("Option not found.")
-
-
-            # ======================================== working code  ===============================================
-            # headers = {
-            #     'X-Kite-Version': '3',
-            #     'Authorization': f'token {api_key}:{request_token}'
-            # }
-
-            # response = requests.get('https://api.kite.trade/instruments', headers=headers)
-            # response.raise_for_status()
-
-            # # Save full CSV
-            # with open('instruments_full.csv', 'w') as f:
-            #     f.write(response.text)
-
-            # # Optional: Extract only selected columns into a new CSV
-            # with open('instruments_full.csv', 'r') as infile, open('instrument_tokens.csv', 'w', newline='') as outfile:
-            #     reader = csv.DictReader(infile)
-            #     writer = csv.DictWriter(outfile, fieldnames=['instrument_token', 'tradingsymbol', 'exchange'])
-            #     writer.writeheader()
-            #     for row in reader:
-            #         writer.writerow({
-            #             'instrument_token': row['instrument_token'],
-            #             'tradingsymbol': row['tradingsymbol'],
-            #             'exchange': row['exchange']
-            #         })
-            #  ===================================== end here ================================================
-            api_key = "doieti8s40hlpp6l"
-            api_secret = "ijm22wvh5ks2k8m1c72psg17drfj4s29"
-            request_token = "RxBj3ux92B82fqfLV1kyoFL5PjNXwvBE"  # Replace with new one daily
-
-            kite = KiteConnect(api_key=api_key)
-
-            session_data = kite.generate_session(request_token, api_secret=api_secret)
+            # Exchange token
+            kite = KiteConnect(api_key=API_KEY)
+            session_data = kite.generate_session(request_token, api_secret=API_SECRET)
             access_token = session_data["access_token"]
-            print(access_token,"=-=-=-=-:access_token")
             kite.set_access_token(access_token)
 
-            KiteToken.objects.create(
-                    access_token=access_token,
-                    request_token=request_token,
-                )
+            KiteToken.objects.create(access_token=access_token, request_token=request_token)
 
-            # # Step 2: Prepare instruments to fetch LTP for
-            # instruments = ["NSE:INFY", "BSE:SENSEX", "NSE:NIFTY 50"]
-            # params = [("i", i) for i in instruments]
+            self.stdout.write(self.style.SUCCESS("✅ Token saved successfully."))
+            self.stdout.write(self.style.SUCCESS(f"🔐 Access Token: {access_token}"))
 
-            # # Step 3: Prepare API headers with access token
-            # headers = {
-            #     "X-Kite-Version": "3",
-            #     "Authorization": f"token {api_key}:{access_token}"
-            # }
-
-            # # Step 4: Make the LTP API call
-            # response = requests.get("https://api.kite.trade/quote/ltp", headers=headers, params=params)
-            # data = response.json()
-
-            # # Step 5: Handle response
-            # if data.get("status") == "success":
-            #     with open("ltp_data.csv", mode="w", newline="") as csvfile:
-            #         fieldnames = ["instrument", "instrument_token", "last_price"]
-            #         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            #         writer.writeheader()
-
-            #         for instrument, details in data["data"].items():
-            #             writer.writerow({
-            #                 "instrument": instrument,
-            #                 "instrument_token": details["instrument_token"],
-            #                 "last_price": details["last_price"]
-            #             })
-
-            #     self.stdout.write(self.style.SUCCESS("✅ LTP data saved to ltp_data.csv"))
-            # else:
-            #     self.stderr.write(f"❌ Failed to fetch LTP: {data}")
         except Exception as e:
-            self.stderr.write(f"Error: {e}")
-
-            # https://chatgpt.com/c/6800e56c-f710-8009-b8d0-5ea6aae71a25
+            self.stderr.write(f"❌ Error: {e}")
+        finally:
+            if driver:
+                driver.quit()
