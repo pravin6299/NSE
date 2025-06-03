@@ -14,6 +14,20 @@
     .market-cap { font-weight: bold; }
     .table-responsive { overflow-x: auto; }
     
+    /* Sortable header styles */
+    .sortable-header {
+        cursor: pointer;
+        user-select: none;
+        transition: color 0.2s;
+    }
+    .sortable-header:hover {
+        color: #007bff !important;
+    }
+    .sort-indicator {
+        display: inline-block;
+        margin-left: 5px;
+    }
+    
     /* Pagination Styles */
     .pagination {
         display: flex;
@@ -65,11 +79,150 @@
         background-color: #007bff;
         color: #fff;
     }
+    .token-section {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .alert {
+        display: none;
+        padding: 10px 15px;
+        border-radius: 4px;
+        margin-left: 10px;
+    }
+    .alert-success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+    .alert-danger {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
 </style>
 {% endblock %}
 
+{% block extrahead %}
+<!-- Add jQuery and other scripts in extrahead block -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script type="text/javascript">
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function generateToken() {
+        const button = document.getElementById('generateToken');
+        const successAlert = document.getElementById('successAlert');
+        const errorAlert = document.getElementById('errorAlert');
+
+        // Disable button and show loading state
+        button.disabled = true;
+        button.textContent = 'Generating...';
+
+        // Hide any existing alerts
+        successAlert.style.display = 'none';
+        errorAlert.style.display = 'none';
+
+        // Get CSRF token from cookie
+        const csrftoken = getCookie('csrftoken');
+
+        // Make AJAX call
+        $.ajax({
+            url: "{% url 'generate_token' %}",
+            type: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'Content-Type': 'application/json'
+            },
+            data: JSON.stringify({}),
+            dataType: 'json',
+            success: function(response) {
+                console.log('Success:', response);
+                if (response.status === 'success') {
+                    successAlert.textContent = 'Token generated successfully!';
+                    successAlert.style.display = 'block';
+                    setTimeout(() => {
+                        successAlert.style.display = 'none';
+                    }, 3000);
+                } else {
+                    errorAlert.textContent = response.message || 'Failed to generate token';
+                    errorAlert.style.display = 'block';
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error:', error);
+                let errorMessage = 'Failed to generate token';
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    errorMessage = response.message || errorMessage;
+                } catch(e) {
+                    errorMessage += ': ' + error;
+                }
+                errorAlert.textContent = errorMessage;
+                errorAlert.style.display = 'block';
+            },
+            complete: function() {
+                // Re-enable button
+                button.disabled = false;
+                button.textContent = 'Generate Token';
+            }
+        });
+    }
+
+    // Add clear filters function
+    function clearFilters() {
+        // Clear search box
+        document.querySelector('input[name="search"]').value = '';
+        
+        // Reset segment dropdown to default
+        document.querySelector('select[name="segment"]').value = '';
+        
+        // Clear market cap inputs
+        document.querySelector('input[name="min_market_cap"]').value = '';
+        document.querySelector('input[name="max_market_cap"]').value = '';
+        
+        // Reset sort dropdown to default
+        document.querySelector('select[name="sort_by"]').value = '-instrument_token';
+        
+        // Submit the form to refresh the page with cleared filters
+        document.getElementById('filter-form').submit();
+    }
+
+    // Add event listener when document is ready
+    $(document).ready(function() {
+        // Attach click handler to clear filters button
+        $('#clear-filters').click(function(e) {
+            e.preventDefault();
+            clearFilters();
+        });
+    });
+</script>
+{% endblock %}
+
 {% block content %}
+{% csrf_token %}
 <div class="container-fluid">
+    <!-- Token Generation Button and Alerts -->
+    <div class="token-section">
+        <button type="button" id="generateToken" class="btn btn-primary" onclick="generateToken()">Generate Token</button>
+        <div id="successAlert" class="alert alert-success" role="alert"></div>
+        <div id="errorAlert" class="alert alert-danger" role="alert"></div>
+    </div>
+
     <h2>Stock Market Data</h2>
 
     <div class="filter-section">
@@ -88,6 +241,8 @@
                 <option value="instrument_token" {% if current_sort == 'instrument_token' %}selected{% endif %}>Market Cap (Low to High)</option>
                 <option value="-volume" {% if current_sort == '-volume' %}selected{% endif %}>Volume (High to Low)</option>
                 <option value="volume" {% if current_sort == 'volume' %}selected{% endif %}>Volume (Low to High)</option>
+                <option value="-change_percent" {% if current_sort == '-change_percent' %}selected{% endif %}>Change % (High to Low)</option>
+                <option value="change_percent" {% if current_sort == 'change_percent' %}selected{% endif %}>Change % (Low to High)</option>
                 <option value="-last_price" {% if current_sort == '-last_price' %}selected{% endif %}>Price (High to Low)</option>
                 <option value="last_price" {% if current_sort == 'last_price' %}selected{% endif %}>Price (Low to High)</option>
                 <option value="-tradingsymbol" {% if current_sort == '-tradingsymbol' %}selected{% endif %}>Symbol (Z to A)</option>
@@ -108,12 +263,25 @@
                     <th>Symbol</th>
                     <th>Name</th>
                     <th>Segment</th>
-                    <th>Change %</th>
+                    <th>
+                        <a href="?page=1&search={{ current_search }}&segment={{ current_segment }}&min_market_cap={{ current_min_market_cap }}&max_market_cap={{ current_max_market_cap }}&sort_by={% if current_sort == 'change_percent' %}-{% endif %}change_percent" class="text-dark text-decoration-none sortable-header">
+                            Change % 
+                            <span class="sort-indicator">
+                                {% if current_sort == 'change_percent' %}
+                                    ▲
+                                {% elif current_sort == '-change_percent' %}
+                                    ▼
+                                {% else %}
+                                    ↕
+                                {% endif %}
+                            </span>
+                        </a>
+                    </th>
                     <th>Current Price</th>
                     <th>Open</th>
                     <th>High</th>
                     <th>Low</th>
-                    <th>Previous Close</th>
+                    <th>Close</th>
                     <th>Volume</th>
                     <th>Market Cap</th>
                     <th>52W High</th>
@@ -224,55 +392,4 @@
 </script>
 {% endblock %}
 
-{% block extrajs %}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script>
-    function updateLiveStock(symbol) {
-        $.getJSON(`/api/live/${symbol}/`, function(data) {
-            if (!data || data.error) {
-                console.error(`Error fetching live data for ${symbol}:`, data ? data.error : "No data returned");
-                return;
-            }
-
-            const price = data.price !== undefined ? parseFloat(data.price).toFixed(2) : "--";
-            const volume = data.volume !== undefined ? data.volume.toLocaleString() : "--";
-            const changePct = data.change_pct !== undefined ? parseFloat(data.change_pct).toFixed(2) : "--";
-            const marketCap = data.marketcap !== undefined ? parseFloat(data.marketcap).toLocaleString() : "--";
-
-            $(`#price-${symbol}`).text(price);
-            $(`#volume-${symbol}`).text(volume);
-            $(`#marketcap-${symbol}`).text(marketCap);
-            $(`#change-${symbol}`).text(`${changePct}%`);
-        }).fail(function(jqxhr, textStatus, error) {
-            console.error(`Failed to fetch live data for ${symbol}:`, textStatus, error);
-        });
-    }
-
-    function refreshAllStocks() {
-        if (!Array.isArray(stockSymbols) || stockSymbols.length === 0) {
-            console.error("No stock symbols available for live updates.");
-            return;
-        }
-
-        stockSymbols.forEach(symbol => updateLiveStock(symbol));
-    }
-
-    $(document).ready(function () {
-        $('.stock-table').DataTable({
-            paging: false,
-            ordering: true,
-            searching: false,
-            responsive: true
-        });
-        
-        refreshAllStocks();
-        setInterval(refreshAllStocks, 10000); // Refresh every 10 seconds
-
-        // Clear filter button functionality
-        $('#clear-filters').on('click', function() {
-            $('#filter-form')[0].reset();
-            window.location = window.location.pathname;
-        });
-    });
-</script>
-{% endblock %}
+{% block extrajs %}{% endblock %}

@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.db.models import Q
-from .models import CorporateFiling, InstrumentDetails, HistoricalOHLC
+from .models import CorporateFiling, InstrumentDetails, HistoricalOHLC, KiteToken
 from datetime import datetime
 from django.core.paginator import Paginator
 import pandas as pd
@@ -8,43 +8,58 @@ import numpy as np
 from django.utils import timezone
 from datetime import timedelta
 from django.utils.timezone import now
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_protect
+import subprocess
+import json
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from kiteconnect import KiteConnect
+import pyotp
+from django.conf import settings
+
+
 # lalit
 def index(request):
     # Get all filings ordered by filing date
     filings = CorporateFiling.objects.all().order_by('-filing_date')
-    
+
     # Get search parameters
     company_name = request.GET.get('company_name', '')
     start_date = request.GET.get('start_date', '')
     end_date = request.GET.get('end_date', '')
     category = request.GET.get('category', '')
-    
+
     # Apply filters if provided
     if company_name:
         filings = filings.filter(company_name__icontains=company_name)
-    
+
     if start_date:
         try:
             start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
             filings = filings.filter(filing_date__gte=start_date)
         except ValueError:
             pass
-    
+
     if end_date:
         try:
             end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
             filings = filings.filter(filing_date__lte=end_date)
         except ValueError:
             pass
-    
+
     if category:
         filings = filings.filter(category=category)
-    
+
     # Get distinct categories for dropdown
     category_values = CorporateFiling.objects.values_list('category', flat=True)
     # Use a set to ensure uniqueness, filter None values, and convert back to sorted list
     categories = sorted(set(c for c in category_values if c))
-    
+
     context = {
         'filings': filings,
         'company_name': company_name,
@@ -53,7 +68,7 @@ def index(request):
         'selected_category': category,
         'categories': categories,
     }
-    
+
     return render(request, 'app/index.html', context)
 
 
@@ -61,37 +76,38 @@ from django.shortcuts import render
 from django.db.models import Q
 from .models import InstrumentDetails, HistoricalOHLC
 
+
 def instrument_list(request):
     # Get filter parameters
     search_query = request.GET.get('search', '')
     instrument_type = request.GET.get('instrument_type', '')
     segment = request.GET.get('segment', '')
-    
+
     # Create a new queryset each time
     base_queryset = InstrumentDetails.objects.all()
-    
+
     # Apply filters to the base queryset
     if search_query:
         base_queryset = base_queryset.filter(
             Q(tradingsymbol__icontains=search_query) |
             Q(name__icontains=search_query)
         )
-    
+
     if instrument_type:
         base_queryset = base_queryset.filter(instrument_type=instrument_type)
-    
+
     if segment:
         base_queryset = base_queryset.filter(segment=segment)
-    
+
     # Get unique values for filters
     instrument_types = InstrumentDetails.objects.values_list('instrument_type', flat=True).distinct()
     segments = InstrumentDetails.objects.values_list('segment', flat=True).distinct()
-    
+
     # Pagination
     paginator = Paginator(base_queryset, 25)  # Show 25 items per page
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
-    
+
     context = {
         'page_obj': page_obj,
         'instrument_types': instrument_types,
@@ -100,8 +116,9 @@ def instrument_list(request):
         'current_instrument_type': instrument_type,
         'current_segment': segment,
     }
-    
+
     return render(request, 'app/instrument_list.html', context)
+
 
 def instrument_detail(request, instrument_id):
     try:
@@ -110,7 +127,7 @@ def instrument_detail(request, instrument_id):
         historical_data = HistoricalOHLC.objects.filter(
             instrument=instrument
         ).order_by('-timestamp')[:30]
-        
+
         # Convert historical data to list of dictionaries for the chart
         historical_data_list = []
         for data in historical_data:
@@ -123,7 +140,7 @@ def instrument_detail(request, instrument_id):
                 'volume': int(data.volume),
                 'interval': data.interval
             })
-        
+
         context = {
             'instrument': instrument,
             'historical_data': historical_data,
@@ -134,13 +151,14 @@ def instrument_detail(request, instrument_id):
         # Handle case where instrument is not found
         return render(request, 'app/error.html', {'message': 'Instrument not found'})
 
+
 def process_stock_data(data_text):
     # Split the text into lines and remove empty lines
     lines = [line.strip() for line in data_text.strip().split('\n') if line.strip()]
-    
+
     # Get headers from the first line
     headers = lines[0].split('\t')
-    
+
     # Process data lines
     data = []
     for line in lines[1:]:
@@ -180,8 +198,9 @@ def process_stock_data(data_text):
                 'Outstanding_shares': int(values[29].replace(',', '')) if values[29] else None
             }
             data.append(stock_data)
-    
+
     return pd.DataFrame(data)
+
 
 import json
 from django.core.paginator import Paginator
@@ -196,6 +215,7 @@ from django.utils.timezone import now
 from datetime import timedelta
 from .models import InstrumentDetails, HistoricalOHLC
 import json
+
 
 def get_change(stock_obj, latest_ohlc_obj, days):
     if not stock_obj or not latest_ohlc_obj:
@@ -219,6 +239,7 @@ def get_change(stock_obj, latest_ohlc_obj, days):
             return None
     return None
 
+
 from django.shortcuts import render
 from django.core.paginator import Paginator
 from django.db.models import Q, Max, Min, Count
@@ -227,7 +248,6 @@ from collections import defaultdict
 from datetime import timedelta
 
 from .models import InstrumentDetails, HistoricalOHLC
-
 
 from collections import defaultdict
 from django.db.models import Q, Max, Min, Count
@@ -285,7 +305,8 @@ def stock_market_view(request):
         except ValueError:
             pass
 
-    if sort_by:
+    # Only apply database sorting for non-change_percent fields
+    if sort_by and 'change_percent' not in sort_by:
         stocks = stocks.order_by(sort_by)
 
     paginator = Paginator(stocks, 25)
@@ -293,7 +314,20 @@ def stock_market_view(request):
     current_page = paginator.get_page(page_number)
     current_ids = list(current_page.object_list.values_list('id', flat=True))
 
-    # 52-week high and low
+    # Get all OHLC data for current page stocks
+    latest_ohlcs = HistoricalOHLC.objects.filter(
+        instrument_id__in=current_ids
+    ).order_by('instrument_id', '-timestamp')
+
+    ohlc_latest_map = {}
+    ohlc_previous_map = defaultdict(list)
+    for ohlc in latest_ohlcs:
+        if ohlc.instrument_id not in ohlc_latest_map:
+            ohlc_latest_map[ohlc.instrument_id] = ohlc
+        elif len(ohlc_previous_map[ohlc.instrument_id]) < 1:
+            ohlc_previous_map[ohlc.instrument_id].append(ohlc)
+
+    # Get 52-week high and low
     one_year_ago = now() - timedelta(days=365)
     ohlc_agg = HistoricalOHLC.objects.filter(
         instrument_id__in=current_ids,
@@ -310,18 +344,6 @@ def stock_market_view(request):
     ).values('instrument_id').annotate(count=Count('id'))
     historical_count_map = {entry['instrument_id']: entry['count'] for entry in historical_counts}
 
-    latest_ohlcs = HistoricalOHLC.objects.filter(
-        instrument_id__in=current_ids
-    ).order_by('instrument_id', '-timestamp')
-
-    ohlc_latest_map = {}
-    ohlc_previous_map = defaultdict(list)
-    for ohlc in latest_ohlcs:
-        if ohlc.instrument_id not in ohlc_latest_map:
-            ohlc_latest_map[ohlc.instrument_id] = ohlc
-        elif len(ohlc_previous_map[ohlc.instrument_id]) < 1:
-            ohlc_previous_map[ohlc.instrument_id].append(ohlc)
-
     stock_data_list = []
     for stock in current_page.object_list:
         latest_ohlc = ohlc_latest_map.get(stock.id)
@@ -336,7 +358,7 @@ def stock_market_view(request):
             change_percent = 0.0
 
         high52, low52 = high_low_map.get(stock.id, (0.0, 0.0))
-        market_cap = current_price * getattr(stock, 'total_shares', 1)
+        market_cap = current_price * getattr(stock, 'instrument_token', 1)
 
         stock_data = {
             'tradingsymbol': stock.tradingsymbol,
@@ -365,8 +387,12 @@ def stock_market_view(request):
             'PRICE_CHANGE_5Y': calculate_price_change(stock, latest_ohlc, 1825),
             'historical_row_count': historical_count_map.get(stock.id, 0),
         }
-
         stock_data_list.append(stock_data)
+
+    # Sort by change_percent if specified
+    if sort_by and 'change_percent' in sort_by:
+        reverse = sort_by.startswith('-')
+        stock_data_list.sort(key=lambda x: x['change_percent'] if x['change_percent'] is not None else 0, reverse=reverse)
 
     context = {
         'stock_data_list': stock_data_list,
@@ -382,7 +408,6 @@ def stock_market_view(request):
     }
 
     return render(request, 'app/stock_market.html', context)
-
 
 
 def stock_detail_view(request, symbol):
@@ -461,3 +486,96 @@ def stock_detail_view(request, symbol):
 
     except Exception as e:
         return render(request, 'app/error.html', {'message': str(e)})
+
+
+def generate_access_token():
+    try:
+        # Get credentials from settings
+        credentials = {
+            'api_key': "t0zjktzp454kxkzt",
+            'api_secret': "aki7m034o2ud5swopbw0g88muoq0ifjt",
+            'user_id': "6353438333",
+            'password':  "Pravin@6299" 
+        }
+
+        # Initialize Kite
+        kite = KiteConnect(api_key=credentials['api_key'])
+
+        # Setup Chrome options - Remove headless mode
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_argument('--start-maximized')  # Start with maximized window
+
+        # Initialize driver
+        driver = webdriver.Chrome(options=chrome_options)
+
+        try:
+            # Get the login URL
+            login_url = kite.login_url()
+            driver.get(login_url)
+
+            # Wait for and fill in the username and password
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "userid"))
+            ).send_keys(credentials['user_id'])
+
+            password_input = driver.find_element(By.ID, "password")
+            password_input.send_keys(credentials['password'])
+            
+            # Click login button
+            driver.find_element(By.CLASS_NAME, "button-orange").click()
+
+            # Wait for the continue button to be clicked after manual TOTP entry
+            # This will wait up to 60 seconds for the URL to change
+            WebDriverWait(driver, 60).until(
+                lambda driver: 'request_token' in driver.current_url
+            )
+            
+            current_url = driver.current_url
+            
+            # Extract request token
+            request_token = current_url.split('request_token=')[1].split('&')[0]
+
+            # Generate session
+            data = kite.generate_session(request_token, api_secret=credentials['api_secret'])
+            access_token = data["access_token"]
+
+            return {
+                'status': 'success',
+                'access_token': access_token,
+                'message': 'Token generated successfully'
+            }
+
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error during token generation: {str(e)}'
+            }
+        finally:
+            driver.quit()
+
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': f'Setup error: {str(e)}'
+        }
+
+
+@csrf_protect
+@require_http_methods(["POST"])
+def generate_token(request):
+    try:
+        print("function called..")
+        result = generate_access_token()
+        
+        if result['status'] == 'success':
+            # Save token to database
+            KiteToken.objects.create(access_token=result['access_token'])
+            return JsonResponse(result)
+        else:
+            return JsonResponse(result, status=500)
+            
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
